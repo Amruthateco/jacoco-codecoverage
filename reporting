@@ -18,6 +18,8 @@
 </project>
 
 <maven.test.skip>true</maven.test.skip>
+<sonar.junit.reportPaths>${project.basedir}/target/surefire-reports</sonar.junit.reportPaths>
+</properties>
 
 <plugin>
                 <groupId>org.jacoco</groupId>
