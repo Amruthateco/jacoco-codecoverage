@@ -67,6 +67,20 @@
 		</plugins>
 	</build>
 </project>
+===
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+                <includes>
+                    <include>**/*MyCustomTest.java</include>
+                </includes>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
 
 ====
  <build>
