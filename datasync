@@ -1,1 +1,66 @@
 gcloud compute ssh comm-sbe-mds-1 --zone us-east1-b --internal-ip --command="sudo su - sbeops '/usr/lib/jvm/java-17-openjdk-amd64/bin/java -Dspring.profiles.active=npe -jar /data/home/sbeops/jarprocess/mds-legacy-sync-ek-lookup-release-develop-1.0-20240213.090016-1-shaded.jar --runner=DataflowRunner -inputFilePath=${GCPBucketpath}/in --inputFileName=mds-legacy-sync-*.txt --correlationId=scorrelationId --outputFilePath=${GCPBucketpath}/out --outputFilename=mds-legacy-sync -project=$PROJECT_ID --region=us-east1 --zone=us-east1-b --serviceAccount=$ServiceAccount --subnetwork=$Subnetwork --tempLocation=$tempLocation --workerMachineType=n1-standard-8 --maxNumWorkers=$maxNumWorkers --labels='{\"capex_project_code\": \"118741\", \"cmdbbus_appid\": \"bap0008975\", \"cmdb_ous_SVCid\": \"asve0028051\", \"cost_center\": \"3180\", \"data_class\": \"3\", \"division\":\"0027\"}' --dataflowKmsKey=$dataflowKmsKey --usePublicIps=false --jobName=mds-legacy-sync-eks-lookup'"
+pipeline {
+    agent any  // Defines that this pipeline can run on any available agent
+
+    environment {
+        // Define environment variables
+        NEXUS_URL = 'http://your-nexus-repository-url'
+        REPO = 'your-repository'
+        GROUP_ID = 'your.group.id'
+        ARTIFACT_ID = 'your-artifact-id'
+        NEXUS_CREDENTIALS_ID = 'nexus-credentials'  // ID for Jenkins credentials to access Nexus
+        GCP_PROJECT = 'your-gcp-project-id'
+        REGION = 'your-region'
+        GCP_STAGING_LOCATION = 'gs://your-bucket/staging'
+    }
+
+    parameters {
+        // Define parameters for the pipeline
+        string(name: 'BRANCH_NAME', defaultValue: 'master', description: 'Branch name to use in the JAR name')
+        string(name: 'JAR_VERSION', defaultValue: '1.0.0', description: 'Version of the JAR to download and execute')
+    }
+
+    stages {
+        stage('Download JAR from Nexus') {
+            steps {
+                script {
+                    // Define the JAR name using parameters
+                    def jarName = "${ARTIFACT_ID}-${params.BRANCH_NAME}-${params.JAR_VERSION}.jar"
+                    
+                    // Use withCredentials to securely use Nexus credentials stored in Jenkins
+                    withCredentials([usernamePassword(credentialsId: NEXUS_CREDENTIALS_ID, passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+                        // Download the JAR from Nexus
+                        sh """
+                            curl -u $USERNAME:$PASSWORD -o $jarName "$NEXUS_URL/repository/$REPO/$GROUP_ID/$ARTIFACT_ID/$params.JAR_VERSION/$jarName"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Trigger Dataflow Job') {
+            steps {
+                script {
+                    def jarName = "${ARTIFACT_ID}-${params.BRANCH_NAME}-${params.JAR_VERSION}.jar"
+
+                    // Trigger the Dataflow job using the downloaded JAR
+                    sh """
+                        java -jar $jarName \
+                            --project=$GCP_PROJECT \
+                            --jobName=${ARTIFACT_ID}-${params.BRANCH_NAME} \
+                            --stagingLocation=$GCP_STAGING_LOCATION \
+                            --region=$REGION
+                            # Add other necessary Dataflow parameters here
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        // Define post-build actions (e.g., cleanup, notifications)
+        always {
+            echo 'Pipeline execution complete.'
+        }
+    }
+}
